@@ -1,0 +1,11 @@
+{
+  "name": "Goblin Market",
+  "short_name": "GobMarket",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#1f2d08",
+  "theme_color": "#6fb512",
+  "icons": [
+    {"src": "/goblin.png", "sizes": "96x96", "type": "image/png"}
+  ]
+}

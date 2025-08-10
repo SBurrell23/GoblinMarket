@@ -1,0 +1,26 @@
+{
+  "tiers": [
+    {"id": "junk", "order": 1, "basePrice": 3},
+    {"id": "curio", "order": 2, "basePrice": 12}
+  ],
+  "workers": [
+    {"id": "scavenger", "role": "gather", "tier": "junk", "baseRate": 15, "desc": "Find junk to sell.", "costs": [{"res": "coins", "base": 50, "mult": 1.15}]},
+    {"id": "barker", "role": "barker", "footfall": 12, "desc": "Increases customers to purchase your goods.", "costs": [{"res": "junk", "base": 75, "mult": 1.18}]},
+    {"id": "collector", "role": "gather_curio", "tier": "curio", "baseRate": 6, "desc": "Finds curious to sell.", "costs": [{"res": "junk", "base": 60, "mult": 1.18}]}
+  ],
+  "buildings": [
+    {"id": "junk_stall", "type": "stall", "costs": [{"res": "coins", "base": 100, "mult": 1.5}], "effects": {"baseCustomers": 8}, "sells": ["junk"], "desc": "Sells your junk."},
+  {"id": "curio_booth", "type": "stall", "costs": [{"res": "coins", "base": 250, "mult": 1.6}], "effects": {"baseCustomers": 6}, "sells": ["curio"], "desc": "Sells your curios."}
+  ,{"id": "oddity_tent", "type": "stall", "costs": [{"res": "curio", "base": 60, "mult": 1.65}], "effects": {"baseCustomers": 5}, "sells": ["curio"], "desc": "Attracts discerning curio seekers."}
+  ],
+  "resourceColors": {
+    "junk": "#aaaaaa",
+    "curio": "#b388ff",
+    "coins": "#ffd54f"
+  },
+  "recipes": [],
+  "policies": [],
+  "globals": {},
+  "milestones": [],
+  "prestige": {}
+}
