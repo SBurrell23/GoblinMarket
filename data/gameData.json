@@ -1,21 +1,40 @@
 {
   "tiers": [
     {"id": "junk", "order": 1, "basePrice": 3},
-    {"id": "curio", "order": 2, "basePrice": 12}
+    {"id": "curio", "order": 2, "basePrice": 12},
+    {"id": "relic", "order": 3, "basePrice": 45},
+    {"id": "arcana", "order": 4, "basePrice": 120},
+  {"id": "contraband", "order": 5, "basePrice": 300},
+  {"id": "exotics", "order": 6, "basePrice": 750}
   ],
   "workers": [
     {"id": "scavenger", "role": "gather", "tier": "junk", "baseRate": 15, "desc": "Find junk to sell.", "costs": [{"res": "coins", "base": 50, "mult": 1.15}]},
-    {"id": "barker", "role": "barker", "footfall": 12, "desc": "Increases customers to purchase your goods.", "costs": [{"res": "junk", "base": 75, "mult": 1.18}]},
-    {"id": "collector", "role": "gather_curio", "tier": "curio", "baseRate": 6, "desc": "Finds curious to sell.", "costs": [{"res": "junk", "base": 60, "mult": 1.18}]}
+    {"id": "collector", "role": "gather_curio", "tier": "curio", "baseRate": 6, "desc": "Finds curios to sell.", "costs": [{"res": "coins", "base": 120, "mult": 1.18}]},
+    {"id": "relic_hunter", "role": "gather_relic", "tier": "relic", "baseRate": 2, "desc": "Recovers ancient relics.", "costs": [{"res": "coins", "base": 400, "mult": 1.22}]},
+    {"id": "hexer", "role": "gather_arcana", "tier": "arcana", "baseRate": 1, "desc": "Conjures arcane goods.", "costs": [{"res": "coins", "base": 900, "mult": 1.25}]},
+    {"id": "smuggler", "role": "gather_contraband", "tier": "contraband", "baseRate": 0.5, "desc": "Sneaks in contraband.", "costs": [{"res": "coins", "base": 2000, "mult": 1.28}]},
+  {"id": "antiquarian", "role": "dual_curio_relic", "produces": {"curio": 6, "relic": 1.5}, "desc": "Appraises and uncovers curios & relics.", "costs": [{"res": "coins", "base": 3200, "mult": 1.30}]}
+  , {"id": "junk_syphon", "role": "late_junk_contraband", "produces": {"junk": 180, "contraband": 0.6}, "desc": "Mass-extracts refuse; occasionally diverts illicit goods.", "costs": [{"res": "coins", "base": 15000, "mult": 1.35}]}
+  , {"id": "exotic_dealer", "role": "gather_exotics", "tier": "exotics", "baseRate": 0.3, "desc": "Secures rare exotics through distant contacts.", "costs": [{"res": "coins", "base": 50000, "mult": 1.4}]}
   ],
   "buildings": [
-    {"id": "junk_stall", "type": "stall", "costs": [{"res": "coins", "base": 100, "mult": 1.5}], "effects": {"baseCustomers": 8}, "sells": ["junk"], "desc": "Sells your junk."},
-  {"id": "curio_booth", "type": "stall", "costs": [{"res": "coins", "base": 250, "mult": 1.6}], "effects": {"baseCustomers": 6}, "sells": ["curio"], "desc": "Sells your curios."}
-  ,{"id": "oddity_tent", "type": "stall", "costs": [{"res": "curio", "base": 60, "mult": 1.65}], "effects": {"baseCustomers": 5}, "sells": ["curio"], "desc": "Attracts discerning curio seekers."}
+    {"id": "junk_stall", "type": "stall", "costs": [{"res": "junk", "base": 80, "mult": 1.5}], "effects": {"baseCustomers": 8}, "sells": ["junk"], "desc": "Sells your junk."},
+    {"id": "curio_booth", "type": "stall", "costs": [{"res": "junk", "base": 150, "mult": 1.5}, {"res": "curio", "base": 30, "mult": 1.55}], "effects": {"baseCustomers": 6}, "sells": ["curio"], "desc": "Sells your curios."},
+    {"id": "oddity_tent", "type": "stall", "costs": [{"res": "curio", "base": 60, "mult": 1.65}], "effects": {"baseCustomers": 5}, "sells": ["curio"], "desc": "Attracts discerning curio seekers."},
+    {"id": "relic_gallery", "type": "stall", "costs": [{"res": "curio", "base": 180, "mult": 1.6}, {"res": "relic", "base": 8, "mult": 1.55}], "effects": {"baseCustomers": 4}, "sells": ["relic"], "desc": "Displays relics to eager hunters."},
+    {"id": "arcane_sanctum", "type": "stall", "costs": [{"res": "relic", "base": 15, "mult": 1.65}, {"res": "curio", "base": 140, "mult": 1.55}], "effects": {"baseCustomers": 3}, "sells": ["arcana"], "desc": "Whispers of power attract scholars."},
+    {"id": "shadow_alcove", "type": "stall", "costs": [{"res": "arcana", "base": 6, "mult": 1.7}, {"res": "relic", "base": 12, "mult": 1.6}], "effects": {"baseCustomers": 2}, "sells": ["contraband"], "desc": "Hidden nook for illicit wares."},
+    {"id": "grand_bazaar", "type": "stall", "costs": [{"res": "junk", "base": 400, "mult": 1.6}, {"res": "curio", "base": 120, "mult": 1.6}, {"res": "relic", "base": 6, "mult": 1.55}], "effects": {"baseCustomers": 14, "multiCustomers": {"peasant": 14, "curio": 6, "relic_hunter": 3}}, "sells": ["junk"], "desc": "Boosts common foot traffic and draws varied interest."},
+  {"id": "auction_house", "type": "stall", "costs": [{"res": "relic", "base": 10, "mult": 1.7}, {"res": "arcana", "base": 4, "mult": 1.65}], "effects": {"baseCustomers": 5, "multiCustomers": {"noble": 3, "scholar": 2}}, "sells": ["relic"], "desc": "High-stakes bidding draws nobles & scholars."},
+    {"id": "exotics_emporium", "type": "stall", "costs": [{"res": "contraband", "base": 18, "mult": 1.75}, {"res": "arcana", "base": 10, "mult": 1.6}], "effects": {"baseCustomers": 2}, "sells": ["exotics"], "desc": "Luxurious venue attracting exotic collectors."}
   ],
   "resourceColors": {
     "junk": "#aaaaaa",
-    "curio": "#b388ff",
+  "curio": "#66ccff",
+  "relic": "#e0a23a",
+    "arcana": "#7e57c2",
+  "contraband": "#ff7043",
+  "exotics": "#ff5fb2",
     "coins": "#ffd54f"
   },
   "recipes": [],

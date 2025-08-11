@@ -23,7 +23,9 @@ export const useGameStore = defineStore('game', {
     coins: 0,
     lastCoins: 0,
     lastCoinsDelta: 0,
+  coinsPerSecHistory: [] as number[], // last 3 per-second deltas
     log: [] as string[],
+  selling: {} as Record<string, boolean>, // per resource sell toggle (default true)
     tick: 0,
     timeSec: 0,
     running: false,
@@ -49,6 +51,7 @@ export const useGameStore = defineStore('game', {
       // seed tier tracking structures
       for(const t of this.data.tiers){
         if(this.inventory[t.id] == null) this.inventory[t.id] = 0;
+  if(this.selling[t.id] == null) this.selling[t.id] = true;
         this.soldThisMinute[t.id] = 0;
         this.producedThisMinute[t.id] = 0;
         this.inventoryLastSec[t.id] = 0;
@@ -93,6 +96,12 @@ export const useGameStore = defineStore('game', {
             if(typeof save.inventory[t.id] === 'number') this.inventory[t.id] = save.inventory[t.id];
           }
         }
+        if(save.selling && typeof save.selling === 'object'){
+          for(const t of this.data.tiers){
+            if(typeof save.selling[t.id] === 'boolean') this.selling[t.id] = save.selling[t.id];
+            else if(this.selling[t.id] == null) this.selling[t.id] = true;
+          }
+        }
         if(save.workers && typeof save.workers === 'object'){
           for(const w of this.data.workers){
             if(typeof save.workers[w.id] === 'number') this.workers[w.id] = save.workers[w.id];
@@ -115,6 +124,7 @@ export const useGameStore = defineStore('game', {
             inventory: this.inventory,
             workers: this.workers,
             buildings: this.buildings,
+            selling: this.selling,
             ts: Date.now()
         };
         localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
@@ -124,6 +134,12 @@ export const useGameStore = defineStore('game', {
     // ---- Helpers ----
     tier(id: string){ return this.data.tiers.find(t=> t.id===id)!; },
     addCoins(v: number){ this.coins += v; },
+    toggleSelling(res: string){
+      if(this.selling[res] == null) this.selling[res] = true;
+      this.selling[res] = !this.selling[res];
+      this.saveGame();
+    },
+    isSelling(res: string){ return this.selling[res] !== false; },
     workerCount(id: string){ return this.workers[id] || 0; },
     buildingLevel(id: string){ return this.buildings[id] || 0; },
     workerCost(id: string){
@@ -195,8 +211,12 @@ export const useGameStore = defineStore('game', {
     customerTypeConfig(){
       return [
         { id: 'peasant', label: 'Peasant', buys: ['junk'], color: '#8d8d8d' },
-        // Curio seekers now prefer curio but will buy junk as fallback (second in list used only if first unavailable)
         { id: 'curio', label: 'Curio Seeker', buys: ['curio','junk'], color: '#b388ff' },
+        { id: 'relic_hunter', label: 'Relic Hunter', buys: ['relic','curio','junk'], color: '#d4af37' },
+        { id: 'scholar', label: 'Arcane Scholar', buys: ['arcana','relic','curio'], color: '#7e57c2' },
+        { id: 'smuggler', label: 'Smuggler', buys: ['contraband','arcana','relic'], color: '#ff7043' },
+  { id: 'noble', label: 'Noble Patron', buys: ['relic','arcana','contraband'], color: '#ffd54f' },
+  { id: 'collector', label: 'Exotic Collector', buys: ['exotics'], color: '#ff5fb2' },
       ];
     },
     customersPerMinuteByType(){
@@ -208,19 +228,24 @@ export const useGameStore = defineStore('game', {
         const lvl = this.buildings[bId]; if(!lvl) continue;
         const def = this.data.buildings.find(b=> b.id===bId); if(!def) continue;
         if(def.type==='stall'){
-          const base = (def.effects?.baseCustomers || 0) * lvl;
-          // attribute entirely to the first matching customer type via sells list
-          if(Array.isArray(def.sells)){
-            for(const r of def.sells){
-              const cType = cfg.find(c=> c.buys.includes(r));
-              if(cType){ out[cType.id] += base; break; }
+          // multi-customer mapping support
+          if(def.effects?.multiCustomers){
+            for(const key in def.effects.multiCustomers){
+              const amt = def.effects.multiCustomers[key] * lvl;
+              if(out[key] != null) out[key] += amt;
+            }
+          } else {
+            const base = (def.effects?.baseCustomers || 0) * lvl;
+            // attribute entirely to the first matching customer type via sells list
+            if(Array.isArray(def.sells)){
+              for(const r of def.sells){
+                const cType = cfg.find(c=> c.buys.includes(r));
+                if(cType){ out[cType.id] += base; break; }
+              }
             }
           }
         }
       }
-      // workers (barkers attract peasants)
-      const barkerCount = this.workers['barker'] || 0;
-      if(barkerCount>0){ out['peasant'] = (out['peasant']||0) + 12 * barkerCount; }
       return out;
     },
     customerTypes(){
@@ -250,21 +275,23 @@ export const useGameStore = defineStore('game', {
       this.tick++;
       if(this.tick % 6 !== 0) return;
       this.timeSec += 0.1;
-
-      // production (per 0.1s slice)
-      const scav = this.workers['scavenger'] || 0;
-      if(scav > 0){
-        const add = ((15 * scav) / 60) * 0.1; // baseRate 15 / min
-        this.inventory['junk'] = (this.inventory['junk'] || 0) + add;
-        if(this.producedThisMinute['junk'] !== undefined) this.producedThisMinute['junk'] += add;
-      }
-      const collectors = this.workers['collector'] || 0;
-      if(collectors > 0){
-        const def = this.data.workers.find(w=> w.id==='collector');
-        const baseRate = def?.baseRate || 0; // per minute
-        const addC = ((baseRate * collectors) / 60) * 0.1;
-        this.inventory['curio'] = (this.inventory['curio'] || 0) + addC;
-        if(this.producedThisMinute['curio'] !== undefined) this.producedThisMinute['curio'] += addC;
+      // production (generic per 0.1s slice) for any worker with tier + baseRate (baseRate per minute)
+      const dt = 0.1;
+      for(const w of this.data.workers){
+        const count = this.workers[w.id] || 0;
+        if(!count) continue;
+        if(w.tier && w.baseRate){
+          const add = ((w.baseRate * count) / 60) * dt; // baseRate per minute
+          this.inventory[w.tier] = (this.inventory[w.tier] || 0) + add;
+          if(this.producedThisMinute[w.tier] !== undefined) this.producedThisMinute[w.tier] += add;
+        } else if(w.produces){
+          for(const res in w.produces){
+            const ratePerMin = w.produces[res];
+            const add = ((ratePerMin * count) / 60) * dt;
+            this.inventory[res] = (this.inventory[res] || 0) + add;
+            if(this.producedThisMinute[res] !== undefined) this.producedThisMinute[res] += add;
+          }
+        }
       }
 
       // second boundary logic
@@ -298,6 +325,7 @@ export const useGameStore = defineStore('game', {
               for(let i=0;i<wholeType;i++){
                 let anySold = false;
                 for(const res of cfg.buys){
+                  if(this.selling[res] === false) continue; // selling disabled for this resource
                   if((this.inventory[res]||0) >= 1){
                     this.inventory[res]-=1;
                     const price = this.resourceSellPrice(res);
@@ -318,6 +346,9 @@ export const useGameStore = defineStore('game', {
         // per-second coins delta
         this.lastCoinsDelta = this.coins - this.lastCoins;
         this.lastCoins = this.coins;
+  // update smoothed total coins/sec (3-second window)
+  this.coinsPerSecHistory.push(this.lastCoinsDelta);
+  if(this.coinsPerSecHistory.length > 3) this.coinsPerSecHistory.shift();
 
         // record per-type delta this second for smoothing (keep last 5 seconds)
         for(const c of this.customerTypeConfig()){
@@ -376,6 +407,25 @@ export const useGameStore = defineStore('game', {
     resourceColor(res: string){
       return (this.data.resourceColors && this.data.resourceColors[res]) || '#ddd';
     },
+    productionPerSec(tierId: string){
+      let total = 0;
+      for(const w of this.data.workers){
+        const count = this.workers[w.id] || 0;
+        if(!count) continue;
+        if(w.tier === tierId && w.baseRate){
+          total += (w.baseRate * count)/60;
+        } else if(w.produces && w.produces[tierId]){
+          total += (w.produces[tierId] * count)/60;
+        }
+      }
+      // future: building production effects can be added here
+      return total;
+    },
+    totalCoinsPerSec(){
+      if(!this.coinsPerSecHistory.length) return 0;
+      const sum = this.coinsPerSecHistory.reduce((a,b)=>a+b,0);
+      return sum / this.coinsPerSecHistory.length;
+    },
     // Smallest next purchase cost (worker or building) that consumes this resource
     nextCostForResource(res: string){
       let best: number|undefined;
@@ -402,6 +452,36 @@ export const useGameStore = defineStore('game', {
         }
       }
       return best || 0; // 0 indicates no purchase uses this resource
+    },
+    // List all active production contributors for a resource with per-second rates
+    resourceProductionContributors(res: string){
+      const out: { id: string; type: string; perSec: number; label: string }[] = [];
+      // workers that directly produce this resource (tier matches)
+      for(const w of this.data.workers){
+        const count = this.workers[w.id] || 0;
+        if(!count) continue;
+        if(w.tier === res && w.baseRate){
+          const perSec = (w.baseRate * count) / 60;
+          out.push({ id: w.id, type: 'worker', perSec, label: w.id.replace(/_/g,' ') });
+        } else if(w.produces && w.produces[res]){
+          const perSec = (w.produces[res] * count) / 60;
+          out.push({ id: w.id, type: 'worker', perSec, label: w.id.replace(/_/g,' ') });
+        }
+      }
+      // buildings that produce (optional future support: effects.produces = {res: ratePerMin})
+      for(const bId in this.buildings){
+        const lvl = this.buildings[bId]; if(!lvl) continue;
+        const def = this.data.buildings.find(b=> b.id===bId); if(!def) continue;
+        const produces = def?.effects?.produces;
+        if(produces && typeof produces === 'object' && produces[res]){
+          const ratePerMin = produces[res];
+            const perSec = (ratePerMin * lvl)/60;
+            out.push({ id: bId, type: 'building', perSec, label: bId.replace(/_/g,' ') });
+        }
+      }
+      // sort by perSec descending
+      out.sort((a,b)=> b.perSec - a.perSec);
+      return out;
     }
   }
 });

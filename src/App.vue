@@ -5,7 +5,8 @@
       <div class="flex gap-6 text-sm">
         <div class="flex flex-col items-end">
           <span class="font-semibold tracking-wide text-[11px] uppercase">Coins</span>
-          <span class="tabular-nums" :class="glow(coinsDelta)">{{ formatNumber(coins) }}</span>
+          <span class="tabular-nums leading-tight" :class="glow(coinsDelta)">{{ formatNumber(coins) }}</span>
+          <span class="text-[10px] text-goblin-300 tabular-nums">+{{ Math.floor(totalCoinsPerSec) }}/s</span>
         </div>
       </div>
     </header>
@@ -34,7 +35,7 @@
               <div><strong>Relic</strong>: Higher value item from Curios. Used with Seals for Contraband.</div>
               <div><strong>Arcana</strong>: Enchanted goods (Curio + Charm). Adds heat when crafted.</div>
               <div><strong>Contraband</strong>: Illicit goods (Relic + Seal). Higher heat & value.</div>
-              <div><strong>Royal / Eldritch</strong>: Future late-game tiers (not yet produced here).</div>
+              <div><strong>Exotics</strong>: Rare imported marvels (very rare).</div>
               <div><strong>Charms</strong>: Timed reagent (1/min) for Arcana.</div>
               <div><strong>Seals</strong>: Timed reagent (needs Tunnel) for Contraband.</div>
             </div>
@@ -44,7 +45,6 @@
             <div class="grid md:grid-cols-2 gap-x-6 gap-y-2">
               <div><strong>Scavenger</strong>: Produces Junk continuously.</div>
               <div><strong>Collector</strong>: Finds (creates) Curios directly. Costs Junk to hire.</div>
-              <div><strong>Barker</strong>: Attracts more customers (footfall).</div>
               <div><strong>Crafty / Hexer</strong>: Accelerate crafting of mid / arcana recipes (placeholder speed bonus).</div>
               <div><strong>Sneaky</strong>: Future: risky opportunistic gains & heat spikes.</div>
               <div><strong>Broker</strong>: Improves prices (market read).</div>
@@ -82,7 +82,6 @@
       <section class="bg-goblin-800/70 rounded-lg p-3 text-xs space-y-2">
         <div class="flex items-center justify-between mb-1">
           <div class="font-semibold text-[11px] uppercase tracking-wide text-goblin-300">Customers</div>
-          <div class="text-[10px] text-goblin-400">Total: <span class="tabular-nums text-goblin-200">{{ totalCustomersPerSec.toFixed(2) }}/s</span></div>
         </div>
         <div class="grid md:grid-cols-3 gap-2">
           <div v-for="ct in customerTypes" :key="ct.id" class="p-2 rounded border border-goblin-700 bg-goblin-900/40 flex flex-col gap-0.5">
@@ -113,14 +112,29 @@
             </span>
             <span class="font-mono text-xs md:text-sm leading-none font-semibold tracking-tight">{{ formatNumber(inventory[t.id]||0) }}</span>
           </div>
-          <div class="h-2 bg-goblin-900 rounded overflow-hidden" :title="purchaseBarTitle(t.id)">
-            <div class="h-full transition-all duration-500 ease-linear" :style="purchaseBarStyle(t.id)"></div>
+          <div class="flex justify-between items-center mt-0.5 mb-0.5">
+            <button @click="toggleSelling(t.id)" class="text-[10px] px-1.5 py-0.5 rounded border transition"
+              :class="store.isSelling(t.id) ? 'border-green-500 text-green-300 hover:bg-green-600/20' : 'border-red-500 text-red-300 hover:bg-red-600/20'">
+              {{ store.isSelling(t.id) ? 'Stop' : 'Start' }} Selling
+            </button>
+            <span class="text-[9px] uppercase tracking-wide" :class="store.isSelling(t.id)?'text-green-400':'text-red-400'">{{ store.isSelling(t.id)?'ON':'OFF' }}</span>
           </div>
-          <div v-if="t.id==='curio' && collectorCount>0" class="text-[9px] text-goblin-400 flex justify-between">
-            <span>Collectors</span><span>+{{ collectorCurioPerSec.toFixed(2) }}/s</span>
+          <div class="h-4 bg-goblin-900 rounded overflow-hidden relative pl-12" :title="gaugeTitle(t.id)">
+            <!-- Flatter & darker gradient (brief red -> deep green) -->
+            <div class="absolute inset-0" style="background:linear-gradient(90deg,#c42222 0%,#4a2c28 14%,#204731 32%,#123524 100%);"></div>
+            <!-- Demand label -->
+            <div class="absolute left-1 top-0 bottom-0 flex items-center pointer-events-none">
+              <span class="text-[10px] uppercase tracking-wide text-black/80">Demand</span>
+            </div>
+            <!-- Indicator line -->
+            <div class="absolute top-0 bottom-0 w-[28px] -ml-[14px] rounded shadow flex items-center justify-center" :style="gaugeIndicatorStyle(t.id)" style="background:linear-gradient(180deg,#276845,#15402b); border:1px solid #0e2d1f; box-shadow:0 0 2px #0e2d1f80 inset,0 0 3px #0e2d1f60;"></div>
+            <!-- Percent at indicator (inside bar) -->
+            <div class="absolute top-0 h-full flex items-center justify-center w-[28px]" :style="gaugeIndicatorStyle(t.id)" style="transform:translateX(-50%);">
+              <span class="text-[10px] font-mono font-medium leading-none tracking-tight" :class="gaugeTextClass(t.id)">{{ gaugePercent(t.id) }}<span class="pl-[2px]">%</span></span>
+            </div>
           </div>
-          <div v-if="t.id==='junk' && scavengerCount>0" class="text-[9px] text-goblin-400 flex justify-between">
-            <span>Scavengers</span><span>+{{ scavengerJunkPerSec.toFixed(2) }}/s</span>
+          <div v-for="c in productionContributors(t.id)" :key="c.id" class="text-[9px] text-goblin-400 flex justify-between">
+            <span class="capitalize">{{ c.label }}</span><span>+{{ c.perSec.toFixed(2) }}/s</span>
           </div>
         </div>
       </section>
@@ -128,10 +142,10 @@
       <section class="bg-goblin-800/70 rounded-lg p-3 space-y-2">
         <h2 class="font-semibold text-lg">Workers</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          <button v-for="w in workers" :key="w.id" @click="buyWorker(w.id)" :disabled="!canAffordWorker(w)" class="group bg-goblin-700 hover:bg-goblin-600 disabled:opacity-35 disabled:cursor-not-allowed active:scale-95 transition rounded p-2 text-left relative">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold capitalize truncate">{{ w.id }}</span>
-              <div class="flex items-center gap-2 text-[10px]">
+      <button v-for="w in workers" :key="w.id" @click="buyWorker(w.id)" :disabled="!canAffordWorker(w)" class="group bg-goblin-700 hover:bg-goblin-600 disabled:opacity-35 disabled:cursor-not-allowed active:scale-95 transition rounded p-2 text-left relative flex flex-col items-start justify-start">
+            <div class="flex items-center justify-between gap-2 w-full">
+        <span class="font-semibold truncate">{{ formatName(w.id) }}</span>
+              <div class="flex items-center gap-2 text-[10px] ml-auto text-right">
                 <div class="flex flex-wrap gap-1 items-center">
                   <template v-if="w.costs">
                     <span v-for="(c,i) in w.costs" :key="i" class="inline-flex items-center gap-0.5">
@@ -151,9 +165,13 @@
               </div>
             </div>
             <div class="text-[10px] mt-1 leading-snug opacity-80 min-h-[2.2em]" v-if="w.desc">{{ w.desc }}</div>
-            <div class="text-[10px] opacity-70" v-if="w.id==='scavenger'">Total: {{ ((15 * (ownedWorkers[w.id]||0))/60).toFixed(2) }} <span :style="{color: resColor('junk')}" class="font-semibold">junk</span>/s</div>
-            <div class="text-[10px] opacity-70" v-if="w.id==='collector'">Total: {{ (((w.baseRate||0) * (ownedWorkers[w.id]||0))/60).toFixed(2) }} <span :style="{color: resColor('curio')}" class="font-semibold">curio</span>/s</div>
-            <div class="text-[10px] opacity-70" v-if="w.id==='barker'">Total: +{{ (((w.footfall||12) * (ownedWorkers[w.id]||0))/60).toFixed(2) }} peasant goblins/s</div>
+            <div class="text-[10px] opacity-70" v-if="w.tier && w.baseRate">Total: {{ workerPerSec(w).toFixed(2) }} <span :style="{color: resColor(w.tier)}" class="font-semibold">{{ w.tier }}</span>/s</div>
+            <template v-else-if="w.produces">
+              <div v-for="(rate,resId) in w.produces" :key="resId" class="text-[10px] opacity-70 flex items-center gap-1">
+                <span class="capitalize" :style="{color: resColor(resId)}">{{ resId }}</span>
+                <span class="tabular-nums">+{{ ((rate * (ownedWorkers[w.id]||0))/60).toFixed(2) }}/s</span>
+              </div>
+            </template>
           </button>
         </div>
       </section>
@@ -161,10 +179,10 @@
       <section class="bg-goblin-800/70 rounded-lg p-3 space-y-2">
         <h2 class="font-semibold text-lg flex items-center gap-2">Buildings</h2>
         <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-          <button v-for="b in buildings" :key="b.id" @click="build(b.id)" :disabled="!canAffordBuilding(b)" class="group bg-goblin-700 hover:bg-goblin-600 disabled:opacity-35 disabled:cursor-not-allowed active:scale-95 transition rounded p-2 text-left relative">
-            <div class="flex items-center justify-between gap-2">
-              <span class="font-semibold capitalize truncate">{{ b.id.replace('_',' ') }}</span>
-              <div class="flex items-center gap-2 text-[10px]">
+      <button v-for="b in buildings" :key="b.id" @click="build(b.id)" :disabled="!canAffordBuilding(b)" class="group bg-goblin-700 hover:bg-goblin-600 disabled:opacity-35 disabled:cursor-not-allowed active:scale-95 transition rounded p-2 text-left relative flex flex-col items-start justify-start">
+            <div class="flex items-center justify-between gap-2 w-full">
+        <span class="font-semibold truncate">{{ formatName(b.id) }}</span>
+              <div class="flex items-center gap-2 text-[10px] ml-auto text-right">
                 <div class="flex flex-wrap gap-1 items-center">
                   <template v-if="b.costs">
                     <span v-for="(c,i) in b.costs" :key="i" class="inline-flex items-center gap-0.5">
@@ -184,9 +202,15 @@
               </div>
             </div>
             <div class="text-[10px] mt-1 leading-snug opacity-80 min-h-[2.0em]" v-if="b.desc">{{ b.desc }}</div>
-            <div class="text-[10px] opacity-70" v-if="b.effects?.baseCustomers">Total: +{{ ((b.effects.baseCustomers * (ownedBuildings[b.id]||0))/60).toFixed(2) }} {{ buildingCustomerTypeLabel(b) }}/s</div>
-            <div class="text-[10px] opacity-70" v-if="b.sells && b.sells.length">Sells
-              <span v-for="(s,i) in b.sells" :key="s" :style="{color: resColor(s)}" class="font-semibold">{{ s }}<span v-if="i<b.sells.length-1">, </span></span>
+            <template v-if="b.effects?.multiCustomers">
+              <div v-for="mc in buildingMultiCustomers(b)" :key="mc.id" class="text-[10px] opacity-70">
+                <span class="capitalize">{{ mc.label }}</span>
+                <span class="tabular-nums ml-1">+{{ mc.perSec.toFixed(2) }}/s</span>
+              </div>
+            </template>
+            <div v-else-if="b.effects?.baseCustomers" class="text-[10px] opacity-70">
+              <span class="capitalize">{{ buildingCustomerTypeLabel(b) }}</span>
+              <span class="tabular-nums ml-1">+{{ ((b.effects.baseCustomers * (ownedBuildings[b.id]||0))/60).toFixed(2) }}/s</span>
             </div>
           </button>
         </div>
@@ -219,6 +243,7 @@ const buildings = computed(()=> gameData.buildings.filter(b=> ['stall','craft','
 
 const coins = computed(()=> store.coins);
 const coinsDelta = computed(()=> store.lastCoinsDelta);
+const totalCoinsPerSec = computed(()=> store.totalCoinsPerSec());
 // minimal state (heat/phase removed)
 const inventory = computed(()=> store.inventory);
 const ownedWorkers = computed(()=> store.workers);
@@ -227,8 +252,7 @@ const recentLog = computed(()=> store.log.slice(-50).reverse());
 const toasts = computed(()=> []); // no toasts now
 const customersBD = computed(()=> store.customersBreakdown());
 const customerTypes = computed(()=> store.customerTypes());
-const totalCustomersPerSec = computed(()=> customerTypes.value.reduce((s:any,c:any)=> s + c.perSec, 0));
-const maxCustomerPerSec = computed(()=> Math.max(0.0001, ...customerTypes.value.map((c:any)=> c.perSec))); // for gauge scaling
+// Removed total customers/sec aggregate display per new design
 
 // Production metrics simplified
 
@@ -246,6 +270,33 @@ function workerCost(id:string){ return store.workerCost(id); }
 function buildingCost(id:string){ return store.buildingCost(id); }
 function buyWorker(id:string){ store.buyWorker(id); }
 function build(id:string){ store.build(id); }
+function toggleSelling(res:string){ store.toggleSelling(res); }
+function workerPerSec(w:any){
+  const count = ownedWorkers.value[w.id]||0;
+  if(!w.baseRate || !count) return 0;
+  return (w.baseRate * count)/60;
+}
+function buildingMultiCustomers(b:any){
+  const lvl = ownedBuildings.value[b.id] || 0;
+  if(!lvl || !b.effects?.multiCustomers) return [];
+  const arr: any[] = [];
+  for(const key in b.effects.multiCustomers){
+    const perMin = b.effects.multiCustomers[key] * lvl;
+    arr.push({ id: key, perMin, perSec: perMin/60, label: customerLabel(key) });
+  }
+  return arr.sort((a,b)=> b.perSec - a.perSec);
+}
+function customerLabel(id:string){
+  switch(id){
+    case 'peasant': return 'peasant goblins';
+    case 'curio': return 'curio seekers';
+    case 'relic_hunter': return 'relic hunters';
+    case 'scholar': return 'arcane scholars';
+    case 'smuggler': return 'smugglers';
+    case 'noble': return 'noble patrons';
+    default: return id;
+  }
+}
 function canAffordWorker(w:any){
   if(w.costs){
     const owned = ownedWorkers.value[w.id]||0;
@@ -285,48 +336,71 @@ function toastClass(t:any){
 // Supply bar helpers
 // Removed legacy supply bar helpers (capacity-based) replaced by purchase progress bar
 // Collector metrics
-const collectorCount = computed(()=> ownedWorkers.value['collector']||0);
-const scavengerCount = computed(()=> ownedWorkers.value['scavenger']||0);
-const collectorCurioPerSec = computed(()=> {
-  if(!collectorCount.value) return 0;
-  const def = workers.value.find((w:any)=> w.id==='collector');
-  if(!def) return 0;
-  return ((def?.baseRate||0) * collectorCount.value)/60;
-});
-const scavengerJunkPerSec = computed(()=> {
-  if(!scavengerCount.value) return 0;
-  const def = workers.value.find((w:any)=> w.id==='scavenger');
-  if(!def) return 0;
-  return ((def?.baseRate||0) * scavengerCount.value)/60;
-});
+// Generic production contributors from store helper
+function productionContributors(res:string){
+  return store.resourceProductionContributors(res);
+}
 function resColor(res:string){ return store.resourceColor(res); }
 function priceFor(res:string){ return store.resourceSellPrice(res); }
 function buildingCustomerTypeLabel(b:any){
   // Infer customer type from sells list (first matching)
   if(Array.isArray(b.sells)){
-    if(b.sells.includes('curio')) return 'curio seekers';
-    if(b.sells.includes('junk')) return 'peasant goblins';
+  if(b.sells.includes('contraband')) return 'smugglers';
+  if(b.sells.includes('arcana')) return 'arcane scholars';
+  if(b.sells.includes('relic')) return 'relic hunters';
+  if(b.sells.includes('curio')) return 'curio seekers';
+  if(b.sells.includes('exotics')) return 'exotic collectors';
+  if(b.sells.includes('junk')) return 'peasant goblins';
   }
   return 'customers';
 }
+function formatName(id:string){
+  return id.split('_').map(p=> p.length? p[0].toUpperCase()+p.slice(1) : p).join(' ');
+}
 // Purchase progress bar (resource toward cheapest spend)
-function purchaseProgress(res:string){
-  const need = store.nextCostForResource(res);
-  if(!need || need<=0) return 0; // no purchases use this resource
-  const have = inventory.value[res]||0;
-  return Math.max(0, Math.min(1, have/need));
+function resourceProductionPerSec(res:string){
+  return store.productionPerSec(res) || 0;
 }
-function purchaseBarStyle(res:string){
-  const pct = (purchaseProgress(res)*100).toFixed(1)+'%';
-  // gradient from amber (#fbc02d) to green (#66bb6a)
-  return { width: pct, background: 'linear-gradient(90deg,#fbc02d,#66bb6a)' };
+function resourceDemandPerSec(res:string){
+  // Sum per-second customers that attempt to buy this resource
+  const perMinByType = store.customersPerMinuteByType();
+  let perMinDemand = 0;
+  // access config for which types buy what
+  const cfg = store.customerTypeConfig ? store.customerTypeConfig() : [];
+  for(const c of cfg){
+    if(c.buys && c.buys.includes(res)){
+      perMinDemand += (perMinByType[c.id]||0);
+    }
+  }
+  return perMinDemand / 60;
 }
-function purchaseBarTitle(res:string){
-  const need = store.nextCostForResource(res);
-  if(!need) return 'No purchases require this resource.';
-  const have = inventory.value[res]||0;
-  const pct = (purchaseProgress(res)*100).toFixed(1);
-  return `${have.toFixed(1)} / ${need} needed (${pct}%) for cheapest purchase using ${res}`;
+function gaugeValue(res:string){
+  const prod = resourceProductionPerSec(res);
+  const demand = resourceDemandPerSec(res);
+  if(prod===0 && demand===0) return 0.5; // neutral when idle
+  if(demand===0) return 1; // full surplus
+  if(prod===0) return 0; // total shortage
+  // ratio mapped so equality => 0.5 fill
+  return prod / (prod + demand); // prod==demand => 0.5
+}
+function gaugeIndicatorStyle(res:string){
+  const v = Math.max(0, Math.min(1, gaugeValue(res)));
+  const pct = (v*100).toFixed(2)+'%';
+  return { left: pct };
+}
+function gaugePercent(res:string){
+  const v = Math.max(0, Math.min(1, gaugeValue(res)));
+  return Math.round(v*100);
+}
+function gaugeTextClass(res:string){
+  // Thinner, crisper text (removed shadow to avoid blur)
+  return 'text-white';
+}
+function gaugeTitle(res:string){
+  const prod = resourceProductionPerSec(res);
+  const demand = resourceDemandPerSec(res);
+  const ratio = demand? (prod/demand).toFixed(2): '∞';
+  return `Production: ${prod.toFixed(2)}/s | Demand: ${demand.toFixed(2)}/s | Prod/Demand: ${ratio}`;
 }
 // pricing & demand removed in minimal version
 </script>
