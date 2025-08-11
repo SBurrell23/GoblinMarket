@@ -84,10 +84,10 @@
           <div class="font-semibold text-[11px] uppercase tracking-wide text-goblin-300">Customers</div>
         </div>
         <div class="grid md:grid-cols-3 gap-2">
-          <div v-for="ct in customerTypes" :key="ct.id" class="p-2 rounded border border-goblin-700 bg-goblin-900/40 flex flex-col gap-0.5">
+      <div v-for="ct in customerTypes" :key="ct.id" class="p-2 rounded border border-goblin-700 bg-goblin-900/40 flex flex-col gap-0.5">
             <div class="flex items-center justify-between">
               <span class="font-semibold flex items-center gap-1">
-                <span class="w-2 h-2 rounded-full" :style="{background: ct.color}"></span>
+        <span class="w-2 h-2 rounded-full border border-goblin-600" :style="customerIndicatorStyle(ct)"></span>
                 {{ ct.label }}
               </span>
               <span class="tabular-nums font-mono">{{ ct.perSec.toFixed(2) }}/s</span>
@@ -120,14 +120,14 @@
             <span class="text-[9px] uppercase tracking-wide" :class="store.isSelling(t.id)?'text-green-400':'text-red-400'">{{ store.isSelling(t.id)?'ON':'OFF' }}</span>
           </div>
           <div class="h-4 bg-goblin-900 rounded overflow-hidden relative pl-12" :title="gaugeTitle(t.id)">
-            <!-- Flatter & darker gradient (brief red -> deep green) -->
-            <div class="absolute inset-0" style="background:linear-gradient(90deg,#c42222 0%,#4a2c28 14%,#204731 32%,#123524 100%);"></div>
+            <!-- Adjusted gradient (lighter surplus end) -->
+            <div class="absolute inset-0" style="background:linear-gradient(90deg,#c42222 0%,#8d1a1a 10%,#2d470d 28%,#3a5d0b 50%,#52860b 70%,#6fb512 85%,#8cdc23 100%);"></div>
             <!-- Demand label -->
             <div class="absolute left-1 top-0 bottom-0 flex items-center pointer-events-none">
               <span class="text-[10px] uppercase tracking-wide text-black/80">Demand</span>
             </div>
             <!-- Indicator line -->
-            <div class="absolute top-0 bottom-0 w-[28px] -ml-[14px] rounded shadow flex items-center justify-center" :style="gaugeIndicatorStyle(t.id)" style="background:linear-gradient(180deg,#276845,#15402b); border:1px solid #0e2d1f; box-shadow:0 0 2px #0e2d1f80 inset,0 0 3px #0e2d1f60;"></div>
+            <div class="absolute top-0 bottom-0 w-[28px] -ml-[14px] rounded shadow flex items-center justify-center" :style="gaugeIndicatorStyle(t.id)" style="background:linear-gradient(180deg,#6fb512,#3a5d0b); border:1px solid #3a5d0b; box-shadow:0 0 2px #3a5d0b80 inset,0 0 3px #3a5d0b60;"></div>
             <!-- Percent at indicator (inside bar) -->
             <div class="absolute top-0 h-full flex items-center justify-center w-[28px]" :style="gaugeIndicatorStyle(t.id)" style="transform:translateX(-50%);">
               <span class="text-[10px] font-mono font-medium leading-none tracking-tight" :class="gaugeTextClass(t.id)">{{ gaugePercent(t.id) }}<span class="pl-[2px]">%</span></span>
@@ -356,6 +356,20 @@ function buildingCustomerTypeLabel(b:any){
 }
 function formatName(id:string){
   return id.split('_').map(p=> p.length? p[0].toUpperCase()+p.slice(1) : p).join(' ');
+}
+function customerIndicatorStyle(ct:any){
+  if(!ct.buys || ct.buys.length===0){
+    return { background: ct.color };
+  }
+  const cols = ct.buys.map((r:string)=> resColor(r));
+  // limit to first 4 for performance/clarity
+  const slice = cols.slice(0,4);
+  if(slice.length===1){
+    return { background: slice[0] };
+  }
+  const pctStep = 100 / slice.length;
+  const stops = slice.map((c:string,i:number)=> `${c} ${Math.round(i*pctStep)}% ${Math.round((i+1)*pctStep)}%`).join(',');
+  return { background: `linear-gradient(90deg,${stops})` };
 }
 // Purchase progress bar (resource toward cheapest spend)
 function resourceProductionPerSec(res:string){
