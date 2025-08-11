@@ -9,8 +9,8 @@ on:
 
 permissions:
   contents: read
-  pages: write      # to deploy with official Pages action
-  id-token: write   # to authenticate for Pages deployment
+  pages: write      # to deploy with official Pages action 
+  id-token: write   # to authenticate for Pages deployment 
 
 concurrency:
   group: pages-deploy
